@@ -1,0 +1,159 @@
+package flixcron
+
+import (
+	"fmt"
+	"io"
+	"local/database"
+	"local/database/cronLog"
+	"log"
+	"net/http"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/robfig/cron/v3"
+)
+
+type Service struct {
+	mu             sync.RWMutex
+	dbService      *database.Service
+	cronLogService *cronLog.Service
+	updatePeriod   time.Duration
+	crons          map[int]Cron
+	cron           *cron.Cron
+}
+
+type Cron struct {
+	ID          int
+	Expression  string
+	TargetUrl   string
+	TargetHost  string
+	LastFired   *time.Time
+	UpdatedAt   *time.Time
+	CronEntryID cron.EntryID
+}
+
+func (c *Cron) TableName() string {
+	return os.Getenv("CRON_TABLE")
+}
+
+func (s *Service) Start() {
+	s.cron.Start()
+
+}
+
+func (s *Service) Stop() {
+	s.cron.Stop()
+}
+
+func (s *Service) Export() (res []*Cron) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, c := range s.crons {
+		cc := c
+		res = append(res, &cc)
+	}
+	return
+}
+
+func NewService(dbService *database.Service, cronLogService *cronLog.Service, updatePeriod int) (s *Service, err error) {
+
+	s = &Service{
+		dbService:      dbService,
+		updatePeriod:   time.Duration(updatePeriod),
+		cronLogService: cronLogService,
+		crons:          make(map[int]Cron),
+		cron:           cron.New(),
+	}
+
+	err = s.loadData()
+
+	go s.loadWorker()
+
+	return
+}
+
+func (s *Service) loadWorker() {
+	for {
+		time.Sleep(time.Second * s.updatePeriod)
+		if err := s.loadData(); err != nil {
+			log.Println(err)
+		}
+	}
+}
+
+func (s *Service) execJob(cronId int) {
+	log.Println("exec job", cronId)
+	if c, ok := s.crons[cronId]; ok {
+
+		req, err := http.NewRequest(http.MethodGet, c.TargetUrl, nil)
+		if err != nil {
+			fmt.Printf("client: could not create request: %s\n", err)
+		}
+		if c.TargetHost != "" {
+			req.Host = c.TargetHost
+		}
+		//req.Header.Set("Content-Type", "application/json")
+
+		client := http.Client{
+			Timeout: 300 * time.Second,
+		}
+
+		res, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("client: error making http request: %s\n", err)
+
+		}
+		defer res.Body.Close()
+		respBytes, _ := io.ReadAll(res.Body)
+
+		s.cronLogService.Log(cronId, res.StatusCode, string(respBytes))
+	}
+}
+
+func (s *Service) loadData() (err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var newCrons []*Cron
+	if err = s.dbService.DB.Find(&newCrons).Error; err == nil {
+		// update and create
+		for _, newCron := range newCrons {
+			oldCron, found := s.crons[newCron.ID]
+			if found && oldCron.UpdatedAt.Equal(*newCron.UpdatedAt) {
+				continue
+			}
+			if oldCron.CronEntryID > 0 {
+				s.cron.Remove(oldCron.CronEntryID)
+			}
+			//	c.AddFunc("0 30 * * * *", func() { fmt.Println("Every hour on the half hour") })
+			var err1 error
+			newCron.CronEntryID, err1 = s.cron.AddFunc(newCron.Expression, func() { s.execJob(newCron.ID) })
+			if err1 != nil {
+				log.Println("error AddFunc", newCron.ID, err1)
+			} else {
+				s.crons[newCron.ID] = *newCron
+				log.Println("Cron added", newCron.ID)
+			}
+
+		}
+		// remove
+		for _, oldCron := range s.crons {
+			found := false
+			for _, newCron := range newCrons {
+				if oldCron.ID == newCron.ID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				if oldCron.CronEntryID > 0 {
+					s.cron.Remove(oldCron.CronEntryID)
+				}
+				delete(s.crons, oldCron.ID)
+				log.Println("Cron removed", oldCron.ID)
+			}
+		}
+	}
+	return
+}
