@@ -28,6 +28,7 @@ type Cron struct {
 	Expression  string
 	TargetUrl   string
 	TargetHost  string
+	LogResponse bool
 	LastFired   *time.Time
 	UpdatedAt   *time.Time
 	CronEntryID cron.EntryID
@@ -105,9 +106,13 @@ func (s *Service) execJob(cronId int) {
 
 		}
 		defer res.Body.Close()
-		respBytes, _ := io.ReadAll(res.Body)
 
-		s.cronLogService.Log(cronId, res.StatusCode, string(respBytes))
+		respString := ""
+		if c.LogResponse {
+			respBytes, _ := io.ReadAll(res.Body)
+			respString = string(respBytes)
+		}
+		s.cronLogService.Log(cronId, res.StatusCode, respString)
 	}
 }
 
