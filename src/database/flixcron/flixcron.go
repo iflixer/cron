@@ -97,13 +97,14 @@ func (s *Service) execJob(cronId int) {
 		//req.Header.Set("Content-Type", "application/json")
 
 		client := http.Client{
-			Timeout: 300 * time.Second,
+			Timeout: 600 * time.Second,
 		}
 
 		res, err := client.Do(req)
 		if err != nil {
 			fmt.Printf("client: error making http request: %s\n", err)
-
+			s.cronLogService.Log(cronId, 408, "request timeout")
+			return
 		}
 		defer res.Body.Close()
 
@@ -138,7 +139,11 @@ func (s *Service) loadData() (err error) {
 				log.Println("error AddFunc", newCron.ID, err1)
 			} else {
 				s.crons[newCron.ID] = *newCron
-				log.Println("Cron added", newCron.ID)
+				if found {
+					log.Println("Cron updated", newCron.ID)
+				} else {
+					log.Println("Cron added", newCron.ID)
+				}
 			}
 
 		}
