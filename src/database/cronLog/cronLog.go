@@ -27,7 +27,7 @@ func (s *Service) Log(logId, cronId, httpCode int, httpResponse string, seconds 
 		s.dbService.DB.Create(&l)
 		return l.ID
 	} else { // update
-		l := CronLog{ID: logId, cronId, HttpCode: httpCode, HttpResponse: httpResponse, Seconds: seconds}
+		l := CronLog{ID: logId, CronId: cronId, HttpCode: httpCode, HttpResponse: httpResponse, Seconds: seconds}
 		s.dbService.DB.Save(&l)
 	}
 	return 0
