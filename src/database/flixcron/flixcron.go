@@ -29,6 +29,7 @@ type Cron struct {
 	TargetUrl   string
 	TargetHost  string
 	LogResponse bool
+	Timeout     int
 	LastFired   *time.Time
 	UpdatedAt   *time.Time
 	CronEntryID cron.EntryID
@@ -86,7 +87,7 @@ func (s *Service) loadWorker() {
 func (s *Service) execJob(cronId int) {
 	log.Println("exec job", cronId)
 	if c, ok := s.crons[cronId]; ok {
-
+		start := time.Now()
 		req, err := http.NewRequest(http.MethodGet, c.TargetUrl, nil)
 		if err != nil {
 			fmt.Printf("client: could not create request: %s\n", err)
@@ -97,13 +98,13 @@ func (s *Service) execJob(cronId int) {
 		//req.Header.Set("Content-Type", "application/json")
 
 		client := http.Client{
-			Timeout: 600 * time.Second,
+			Timeout: time.Duration(c.Timeout) * time.Second,
 		}
 
 		res, err := client.Do(req)
 		if err != nil {
 			fmt.Printf("client: error making http request: %s\n", err)
-			s.cronLogService.Log(cronId, 408, "request timeout")
+			s.cronLogService.Log(cronId, 408, err.Error(), int(time.Since(start).Seconds()))
 			return
 		}
 		defer res.Body.Close()
@@ -113,7 +114,7 @@ func (s *Service) execJob(cronId int) {
 			respBytes, _ := io.ReadAll(res.Body)
 			respString = string(respBytes)
 		}
-		s.cronLogService.Log(cronId, res.StatusCode, respString)
+		s.cronLogService.Log(cronId, res.StatusCode, respString, int(time.Since(start).Seconds()))
 	}
 }
 
