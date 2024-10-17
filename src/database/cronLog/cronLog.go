@@ -21,9 +21,16 @@ func (c *CronLog) TableName() string {
 	return os.Getenv("CRON_LOG_TABLE")
 }
 
-func (s *Service) Log(cronId, httpCode int, httpResponse string, seconds int) {
-	l := CronLog{CronId: cronId, HttpCode: httpCode, HttpResponse: httpResponse, Seconds: seconds}
-	s.dbService.DB.Create(&l)
+func (s *Service) Log(logId, cronId, httpCode int, httpResponse string, seconds int) int {
+	if logId == 0 { //create
+		l := CronLog{CronId: cronId}
+		s.dbService.DB.Create(&l)
+		return l.ID
+	} else { // update
+		l := CronLog{ID: logId, cronId, HttpCode: httpCode, HttpResponse: httpResponse, Seconds: seconds}
+		s.dbService.DB.Save(&l)
+	}
+	return 0
 }
 
 func NewService(dbService *database.Service) (s *Service, err error) {

@@ -88,6 +88,7 @@ func (s *Service) execJob(cronId int) {
 	log.Println("exec job", cronId)
 	if c, ok := s.crons[cronId]; ok {
 		start := time.Now()
+		logId := s.cronLogService.Log(0, cronId, 0, "", 0)
 		req, err := http.NewRequest(http.MethodGet, c.TargetUrl, nil)
 		if err != nil {
 			fmt.Printf("client: could not create request: %s\n", err)
@@ -104,7 +105,7 @@ func (s *Service) execJob(cronId int) {
 		res, err := client.Do(req)
 		if err != nil {
 			fmt.Printf("client: error making http request: %s\n", err)
-			s.cronLogService.Log(cronId, 408, err.Error(), int(time.Since(start).Seconds()))
+			s.cronLogService.Log(logId, cronId, 408, err.Error(), int(time.Since(start).Seconds()))
 			return
 		}
 		defer res.Body.Close()
@@ -114,7 +115,7 @@ func (s *Service) execJob(cronId int) {
 			respBytes, _ := io.ReadAll(res.Body)
 			respString = string(respBytes)
 		}
-		s.cronLogService.Log(cronId, res.StatusCode, respString, int(time.Since(start).Seconds()))
+		s.cronLogService.Log(logId, cronId, res.StatusCode, respString, int(time.Since(start).Seconds()))
 	}
 }
 
