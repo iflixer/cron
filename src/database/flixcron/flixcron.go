@@ -124,7 +124,7 @@ func (s *Service) loadData() (err error) {
 	defer s.mu.Unlock()
 
 	var newCrons []*Cron
-	if err = s.dbService.DB.Find(&newCrons).Error; err == nil {
+	if err = s.dbService.DB.Where("active=?", 1).Find(&newCrons).Error; err == nil {
 		// update and create
 		for _, newCron := range newCrons {
 			oldCron, found := s.crons[newCron.ID]
