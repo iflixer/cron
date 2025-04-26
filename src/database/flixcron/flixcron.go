@@ -26,6 +26,7 @@ type Service struct {
 type Cron struct {
 	ID          int
 	Expression  string
+	Method      string
 	TargetUrl   string
 	TargetHost  string
 	LogResponse bool
@@ -89,7 +90,7 @@ func (s *Service) execJob(cronId int) {
 	if c, ok := s.crons[cronId]; ok {
 		start := time.Now()
 		logId := s.cronLogService.Log(0, cronId, 0, "", 0)
-		req, err := http.NewRequest(http.MethodGet, c.TargetUrl, nil)
+		req, err := http.NewRequest(c.Method, c.TargetUrl, nil)
 		if err != nil {
 			fmt.Printf("client: could not create request: %s\n", err)
 		}
