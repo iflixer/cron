@@ -34,6 +34,7 @@ type Cron struct {
 	LastFired   *time.Time
 	UpdatedAt   *time.Time
 	CronEntryID cron.EntryID
+	IsRunning   bool
 }
 
 func (c *Cron) TableName() string {
@@ -88,6 +89,16 @@ func (s *Service) loadWorker() {
 func (s *Service) execJob(cronId int) {
 	log.Println("exec job", cronId)
 	if c, ok := s.crons[cronId]; ok {
+		if c.IsRunning {
+			log.Println("job is already running, id:", cronId)
+			return
+		}
+		c.IsRunning = true
+		s.crons[cronId] = c
+		defer func() {
+			c.IsRunning = false
+			s.crons[cronId] = c
+		}()
 		start := time.Now()
 		logId := s.cronLogService.Log(0, cronId, 0, "", 0)
 		req, err := http.NewRequest(c.Method, c.TargetUrl, nil)
@@ -139,13 +150,13 @@ func (s *Service) loadData() (err error) {
 			var err1 error
 			newCron.CronEntryID, err1 = s.cron.AddFunc(newCron.Expression, func() { s.execJob(newCron.ID) })
 			if err1 != nil {
-				log.Println("error AddFunc", newCron.ID, err1)
+				log.Println("error AddFunc, id:", newCron.ID, err1)
 			} else {
 				s.crons[newCron.ID] = *newCron
 				if found {
-					log.Println("Cron updated", newCron.ID)
+					log.Println("Cron updated, id:", newCron.ID)
 				} else {
-					log.Println("Cron added", newCron.ID)
+					log.Println("Cron added, id:", newCron.ID)
 				}
 			}
 
@@ -164,7 +175,7 @@ func (s *Service) loadData() (err error) {
 					s.cron.Remove(oldCron.CronEntryID)
 				}
 				delete(s.crons, oldCron.ID)
-				log.Println("Cron removed", oldCron.ID)
+				log.Println("Cron removed, id:", oldCron.ID)
 			}
 		}
 	}

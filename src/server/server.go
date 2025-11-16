@@ -6,6 +6,7 @@ import (
 	"local/database/flixcron"
 	"log"
 	"net/http"
+	"time"
 )
 
 type Service struct {
@@ -50,6 +51,33 @@ func (s *Service) Handler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-type", "application/json")
 		w.Write(j)
+		return
+	}
+
+	if r.URL.String() == "/test10" {
+		log.Println("Request test10 start")
+		time.Sleep(10 * time.Second)
+		log.Println("Request test10 end")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("slept 10 seconds"))
+		return
+	}
+
+	if r.URL.String() == "/test60" {
+		log.Println("Request test60 start")
+		time.Sleep(60 * time.Second)
+		log.Println("Request test60 end")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("slept 60 seconds"))
+		return
+	}
+
+	if r.URL.String() == "/test120" {
+		log.Println("Request test120 start")
+		time.Sleep(120 * time.Second)
+		log.Println("Request test120 end")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("slept 120 seconds"))
 		return
 	}
 
