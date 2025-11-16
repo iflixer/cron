@@ -1,7 +1,6 @@
 package flixcron
 
 import (
-	"fmt"
 	"io"
 	"local/database"
 	"local/database/cronLog"
@@ -25,6 +24,7 @@ type Service struct {
 
 type Cron struct {
 	ID          int
+	Name        string
 	Expression  string
 	Method      string
 	TargetUrl   string
@@ -90,7 +90,7 @@ func (s *Service) execJob(cronId int) {
 	log.Println("exec job", cronId)
 	if c, ok := s.crons[cronId]; ok {
 		if c.IsRunning {
-			log.Println("job is already running, id:", cronId)
+			log.Printf("job is already running, id: %d, name: %s\n", cronId, c.Name)
 			return
 		}
 		c.IsRunning = true
@@ -103,7 +103,7 @@ func (s *Service) execJob(cronId int) {
 		logId := s.cronLogService.Log(0, cronId, 0, "", 0)
 		req, err := http.NewRequest(c.Method, c.TargetUrl, nil)
 		if err != nil {
-			fmt.Printf("client: could not create request: %s\n", err)
+			log.Printf("could not create request, id: %d, name: %s, error: %s\n", cronId, c.Name, err.Error())
 		}
 		if c.TargetHost != "" {
 			req.Host = c.TargetHost
@@ -116,7 +116,7 @@ func (s *Service) execJob(cronId int) {
 
 		res, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("client: error making http request: %s\n", err)
+			log.Printf("error making http request, id: %d, name: %s, error: %s\n", cronId, c.Name, err.Error())
 			s.cronLogService.Log(logId, cronId, 408, err.Error(), int(time.Since(start).Seconds()))
 			return
 		}
@@ -150,13 +150,13 @@ func (s *Service) loadData() (err error) {
 			var err1 error
 			newCron.CronEntryID, err1 = s.cron.AddFunc(newCron.Expression, func() { s.execJob(newCron.ID) })
 			if err1 != nil {
-				log.Println("error AddFunc, id:", newCron.ID, err1)
+				log.Printf("error AddFunc, id: %d, name: %s, error: %s\n", newCron.ID, newCron.Name, err1.Error())
 			} else {
 				s.crons[newCron.ID] = *newCron
 				if found {
-					log.Println("Cron updated, id:", newCron.ID)
+					log.Printf("cron updated, id: %d, name: %s\n", newCron.ID, newCron.Name)
 				} else {
-					log.Println("Cron added, id:", newCron.ID)
+					log.Printf("cron added, id: %d, name: %s\n", newCron.ID, newCron.Name)
 				}
 			}
 
@@ -175,7 +175,7 @@ func (s *Service) loadData() (err error) {
 					s.cron.Remove(oldCron.CronEntryID)
 				}
 				delete(s.crons, oldCron.ID)
-				log.Println("Cron removed, id:", oldCron.ID)
+				log.Printf("cron removed, id: %d, name: %s\n", oldCron.ID, oldCron.Name)
 			}
 		}
 	}
